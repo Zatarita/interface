@@ -6,30 +6,33 @@ namespace tpl
 	{
 		std::ifstream stream(path, std::ios::binary);
 		if (!stream.is_open())
-			emit(level::error, "Unable To Open Requested File.");
+			print(Level::EXCEPTION, EXCEPT_TEXT("Unable To Open Requested File."));
 		if (!validateFile(stream))
-			emit(level::error, "Unable To Open Requested File. Unknown Format!");
+			print(Level::EXCEPTION, EXCEPT_TEXT("Unable To Open Requested File. Unknown Format!"));
 
+		print(Level::LOG, "\tLoading TPL From File: " + path);
 		loadEntries(stream);
 	}
 
 	void TplFile::loadFromMemory(const ByteArray& data)
 	{
 		imemstream stream(data.data(), data.size());
-		stream.exceptions(std::ifstream::failbit | std::ifstream::badbit);
 		if (!validateFile(stream))
-			emit(level::error, "Unable To Open Requested File. Unknown Format!");
+			print(Level::EXCEPTION, EXCEPT_TEXT("Unable To Open Requested File. Unknown Format!"));
 
+		print(Level::LOG, "\tLoading TPL From Memory.");
 		loadEntries(stream);
 	}
 
 	bool TplFile::validateFile(std::istream& stream)
 	{
+		print(Level::VERBOSE, "\t\tParsing Header Guard");
 		le_uint32_t header_guard{};
 		stream >> header_guard;
 
-		if (header_guard.cast() != HEADER_GUARD);
-			return true;
+		print(Level::VERBOSE, "\t\tValidating Header Guard: " + std::to_string(header_guard));
+		if (header_guard.cast() != HEADER_GUARD)
+			return false;
 		return true;
 	}
 
@@ -37,7 +40,8 @@ namespace tpl
 	{
 		le_uint32_t childCount{};
 		stream >> childCount;
-		if (childCount > ENTRY_COUNT_GUARD) emit(level::error, "Unable To Open Requested File. Too Many Entries: " + std::to_string(childCount.cast()));
+		if (childCount > ENTRY_COUNT_GUARD) print( Level::EXCEPTION, EXCEPT_TEXT( "Unable To Open Requested File. Too Many Entries: " + std::to_string( childCount.cast() ) ) );
+		print(Level::VERBOSE, "\t\tEntry Count: " + std::to_string(childCount));
 		return childCount;
 	}
 
@@ -48,18 +52,21 @@ namespace tpl
 		le_uint64_t FIXMEATSOMEPOINT;
 		stream >> FIXMEATSOMEPOINT;
 
-		entries.resize(entryCount);
+		print(Level::LOG, "\tAllocating Memory..");
+		entries.resize(entryCount, {getLog()});
 
+		print(Level::LOG, "\tLoading Entries: ");
 		for (auto& entry : entries)
 			entry.load(stream);
 	}
 
 	void TplFile::save(const std::string& path, bool include_mips)
 	{
-		auto directory_path = std::filesystem::path(path).parent_path();
-		if(!directory_path.empty())
-			std::filesystem::create_directories(directory_path);
+		if (entries.size() == 0) return;
+
+		Interface::createSavePath(path);
 		std::ofstream stream(path, std::ios::binary);
+		if (!stream.is_open()) print(Level::EXCEPTION, EXCEPT_TEXT("Unable To Open Requested File: " + path));
 
 		calculateOffsets();
 		writeHeader(stream);
@@ -69,8 +76,8 @@ namespace tpl
 	void TplFile::calculateOffsets(bool include_mips)
 	{
 		std::vector<Entry*> entriesWithMipmaps;
-		size_t starting_offset = TPL_HEADER_SIZE;
-		size_t mipmaps_starting_offset = TPL_HEADER_SIZE + (TPL_ENTRY_SIZE * entries.size());
+		uint32_t starting_offset = TPL_HEADER_SIZE;
+		uint32_t mipmaps_starting_offset = TPL_HEADER_SIZE + (TPL_ENTRY_SIZE * static_cast<uint32_t>(entries.size()));
 
 		for (auto& entry : entries)
 		{
@@ -112,7 +119,7 @@ namespace tpl
 
 	void TplFile::writeHeader(std::ostream& stream)
 	{
-		stream << le_uint32_t(HEADER_GUARD) << le_uint32_t(entries.size()) << le_uint64_t(0x10);
+		stream << le_uint32_t(HEADER_GUARD) << le_uint32_t( static_cast<uint32_t>( entries.size() ) ) << le_uint64_t(0x10);
 	}
 
 	void TplFile::writeEntries(std::ostream& stream, bool include_mips)
@@ -128,14 +135,42 @@ namespace tpl
 			extract(i, path + "/" + std::to_string(i) + ".tpl", include_mips);
 	}
 
+	void TplFile::decompileAll(const std::string& path, bool include_mips)
+	{
+		for (size_t i = 0; i < entries.size(); i++)
+			decompile(i, path, include_mips);
+	}
+
 	void TplFile::extract(const size_t index, const std::string& path, bool include_mips)
 	{
 		if (index > entries.size())
-			emit(level::error, "Index Exceeds Bounds Of Array");
+			print(Level::EXCEPTION, EXCEPT_TEXT("Index Exceeds Bounds Of Array"));
 
-		tpl::TplFile newFile({ entries[index] });
+		tpl::TplFile newFile({ entries[index] }, getLog());
 
 		newFile.save(path, include_mips);
+	}
+
+	void TplFile::decompile(const size_t index, const std::string& path, bool include_mips)
+	{
+		if (index > entries.size())
+			print(Level::EXCEPTION, EXCEPT_TEXT("Index Exceeds Bounds Of Array"));
+
+		auto directory_path = std::filesystem::path(path).parent_path();
+		if (!directory_path.empty())
+			std::filesystem::create_directories(directory_path);
+
+		entries[index].getTexture().saveTGA(path + "/" + std::to_string(index) + ".tga");
+		if (entries[index].hasMipmaps())
+		{
+			entries[index].getMipmap(0).saveTGA(path + "/" + std::to_string(index) + "_mip0.tga");
+			entries[index].getMipmap(1).saveTGA(path + "/" + std::to_string(index) + "_mip1.tga");
+		}
+	}
+
+	void TplFile::compile(const std::string& path)
+	{
+
 	}
 
 	TplFile& TplFile::operator += (TplFile& rhs)

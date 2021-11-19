@@ -1,4 +1,3 @@
-
 #include "structures/afsinfo.h"
 
 namespace dat
@@ -47,7 +46,7 @@ namespace dat
 		readEntries(stream);
 	}
 
-	const size_t& AfsInfo::size()
+	size_t AfsInfo::size()
 	{
 		return entries.size();
 	}
@@ -81,13 +80,14 @@ namespace dat
 		{
 			if (std::filesystem::is_directory(entry.path())) continue;
 			std::cout << entry.path().string().substr(path.size() + 1) << " : " << std::filesystem::file_size(entry.path()) << std::endl;
-			entries.push_back({ entry.path().string().substr(path.size() + 1), (uint32_t)std::filesystem::file_size(entry.path()) });
+			uint32_t filesize = static_cast<uint32_t>( std::filesystem::file_size( entry.path() ) );
+			entries.push_back({ entry.path().string().substr(path.size() + 1), filesize });
 		}
 	}
 
 	size_t AfsInfo::calculateSize()
 	{
-		size_t ret{ entries.size() * 4 };
+		size_t ret{ (entries.size() * 4) + 1 };
 		for (auto& entry : entries)
 			ret += entry.filename.size() + 2;
 		return ret;

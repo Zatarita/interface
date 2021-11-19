@@ -2,7 +2,7 @@
 
 namespace itm
 {
-	ItmFile::ItmFile(const std::string& path)
+	ItmFile::ItmFile(const std::string& path, const Interface::Log& log) : Logger(&log)
 	{
 		loadFromFile(path);
 	}
@@ -53,7 +53,7 @@ namespace itm
 
 	void ItmFile::resizeEntries(const uint32_t& count)
 	{
-		entries.resize(count);
+		entries.resize(count, Entry(getLog()));
 	}
 
 	void ItmFile::loadIDs(std::istream& stream)

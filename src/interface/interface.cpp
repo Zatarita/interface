@@ -1,28 +1,27 @@
 #include "interface/interface.h"
 
-
-
 namespace Interface
 {	
+	CLI::CLI()
+	{
+		output.attachProbe( new stdOutput() );				   // Lifetime managed by logger
+		//output.attachProbe( new fileOutput("Interface.log") ); // Lifetime managed by logger
+	}
+
 	void CLI::runCommand(int argc, char* argv[])
 	{
-		if (argc <= 1)
-			std::cout << help;
+		if (argc == 0) { output.log(Level::ERROR, help); return; }
 
-		for (int i = 1; i < argc; i++)
-		{
-			if (flags.count(argv[i]))
-				output.setLevel(flags[argv[i]]);
-			else if (commands.count(argv[i]))
-			{
-				commands[argv[i++]](argc - i, argv + i, output);
-				return;
-			}
-			else
-			{
-				std::cout << help;
-				return;
-			}
-		}
+		ArgParser parser(argc - 1, argv + 1);						// Shave off the program name from the arguments
+
+		if(parser.hasFlag("verbose") || parser.hasFlag("v") )
+			output.setLevel(Level::VERBOSE);
+		else if (parser.hasFlag("silent") || parser.hasFlag("s"))
+			output.setLevel(Level::SILENT);
+
+		if ( commands.count( parser.cmd() ) )
+			commands[parser.cmd()](parser, output);
+		else
+			output.log(Level::ERROR, help);
 	}
 }

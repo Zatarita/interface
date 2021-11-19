@@ -1,22 +1,33 @@
 #include "interface/log.h"
 
+
 namespace Interface
 {
-	void Log::setLevel(const Flags& level)
+	Log::~Log()
+	{
+		
+	}
+
+	void Log::setLevel(const Level& level) const
 	{
 		logLevel = level;
 	}
 
-	void Log::log(const Flags& severity, const std::string& msg) const
+	void Log::log(const Level& severity, const std::string& msg) const
 	{
 		history.push_back(msg + "\n");
-		if (severity == Flags::EXCEPTION)
+		for (auto probe : probes)
 		{
-			saveHistory("dump.txt");
-			throw std::logic_error(msg);
+			if (severity == Level::EXCEPTION)
+			{
+				probe->write("EXCEPTION HALT AT: " + msg + "\n");
+				saveHistory("dump.txt");
+				throw std::logic_error(msg);
+			}
+			if (severity <= logLevel) 
+				probe->write(msg + "\n");
 		}
-		if (streamBuffer)
-			if (severity <= logLevel) { *streamBuffer << msg << "\n"; }
+		
 	}
 
 	void Log::saveHistory(const std::string& path) const
@@ -24,7 +35,7 @@ namespace Interface
 		std::ofstream stream(path);
 		if (!stream.is_open())
 		{
-			log(Flags::ERROR, "Unable To Open Requested File");
+			log(Level::ERROR, "Unable To Open Requested File");
 			return;
 		}
 
@@ -32,8 +43,8 @@ namespace Interface
 			stream << str;
 	}
 
-	void Log::redirectBuffer(std::ostream* newBuffer)
+	void Log::attachProbe(OutputWrapper* newProbe)
 	{
-		streamBuffer = newBuffer;
+		probes.push_back(newProbe);
 	}
 }

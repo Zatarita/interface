@@ -9,29 +9,33 @@
 #include "tpl.h"
 #include "bin.h"
 
+using namespace Interface;
+
 
 namespace itm
 {
 	struct Entry
 	{
-		le_uint32_t id;
-		le_int32_t binOffset, tplOffset;
-		ByteArray bin;		// todo -> make bin files once defined
+		le_uint32_t id{};
+		le_int32_t binOffset{}, tplOffset{};
+		ByteArray bin{};		// todo -> make bin files once defined
 		tpl::TplFile tpl;
+
+		Entry(const Interface::Log& log) : tpl(log) {}
 	};
 
-	class ItmFile
+	class ItmFile : protected Interface::Logger
 	{
-		le_uint32_t IDCount, BINCount, TPLCount;
+		le_uint32_t IDCount{}, BINCount{}, TPLCount{};
 
-		std::vector<le_uint32_t> offsets;
-		std::vector<Entry> entries;
+		std::vector<le_uint32_t> offsets{};
+		std::vector<Entry> entries{};
 
-		size_t filesize;
+		size_t filesize{};
 
 	public:
-		ItmFile() = default;
-		ItmFile(const std::string& path);
+		ItmFile(const Interface::Log& log) : Logger(&log) {}
+		ItmFile(const std::string& path, const Interface::Log& log);
 
 		void loadFromFile(const std::string& path);
 		void getFileSize(std::istream& stream);

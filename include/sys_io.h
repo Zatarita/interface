@@ -36,7 +36,7 @@ public:
 			break;
 		case std::ios::cur:
 			if (_Which == std::ios_base::in)
-				gbump(_Off);
+				gbump(static_cast<int>(_Off));
 			break;
 		case std::ios::end:
 			if (_Which == std::ios_base::in)

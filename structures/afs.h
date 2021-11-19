@@ -1,7 +1,7 @@
 #pragma once
 
 #include "include/sys_io.h"
-#include "generic.h"
+#include "interface/common.h"
 #include "afsinfo.h"
 
 #include <string>
@@ -9,9 +9,11 @@
 #include <vector>
 #include <filesystem>
 
+using namespace Interface;
+
 namespace afs
 {
-	class AfsFile
+	class AfsFile : protected Interface::Logger
 	{
 		struct Entry
 		{
@@ -45,14 +47,15 @@ namespace afs
 		static inline const uint16_t    BLOCK_ALLIGNMENT{ 0x800 };
 		static inline const uint16_t    ENTRY_SIZE		{ 0x30 };
 		static inline const std::string SIGNATURE		{ "AFS" };
+		static inline const std::string SIZE0			{ "size0.dat" + std::string(0x27, '\0')};
 
 		std::string signature{ "AFS\0" };
 		le_uint32_t file_count{};
 		std::vector<Entry> files{};
 
-		dat::AfsInfo datInfo{};
+		dat::AfsInfo datInfo;
 
-		const size_t& indexFromName(const std::string& name);
+		size_t indexFromName(const std::string& name);
 
 		bool validateHeader(std::istream& stream);
 		void getFileCount(std::istream& stream);
@@ -78,16 +81,17 @@ namespace afs
 		void padRemainingFile(std::ostream& stream);
 		void generateAfsInfo();
 	public:
-		AfsFile() = default;
-		AfsFile(const std::string& path);
+		AfsFile(const Interface::Log& log) : Logger(&log), datInfo(log) {};
+		AfsFile(const std::string& path, const Interface::Log& log);
 
 		bool loadFromFile(const std::string& path);
 
-		void save(const size_t& index, const std::string& path, const bool& mkdirs = false);
-		void save(const std::string& name, const std::string& path, const bool& mkdirs = false);
-		void saveAll(const std::string& path, const bool& mkdirs = false);
+		void extract(const size_t& index, const std::string& path, const bool& ignore_empty);
+		void extract(const std::string& name, const std::string& path, const bool& ignore_empty);
+		void extractAll(const std::string& path, const bool& ignore_empty = false);
 
 		void buildAfs(const std::string& path, const std::string& out);
+		void save(const std::string& path);
 
 		std::vector<std::string> getFileNames();
 		std::vector<std::string> getFilePaths();

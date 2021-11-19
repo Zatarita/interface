@@ -1,5 +1,7 @@
 #include "interface/interface.h"
 
+#include "structures/collision_geometry.h"
+
 #include <iostream>
 #include <string>
 #include <map>

@@ -1,14 +1,17 @@
 #pragma once
 
 #include "include/sys_io.h"
+#include "interface/common.h"
 
 #include <vector>
 #include <string>
 #include <filesystem>
 
+using namespace Interface;
+
 namespace dat
 {
-	class AfsInfo
+	class AfsInfo : protected Interface::Logger
 	{
 		struct Entry
 		{
@@ -28,9 +31,10 @@ namespace dat
 		void readSizes(std::istream& stream);
 
 	public:
+		AfsInfo(const Interface::Log& log) : Logger(&log) {};
 		void load(const ByteArray& data, const size_t& count);
 
-		const size_t& size();
+		size_t size();
 		Entry& operator[] (const size_t& index);
 
 		std::vector<std::string> getFilePaths();

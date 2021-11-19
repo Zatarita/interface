@@ -1,26 +1,42 @@
-#include "interface/commands/afs.h"
+#include "interface/commands/cmd_afs.h"
 
 namespace Interface
 {
 	namespace AFS
 	{
-		void AfsExtract(int argc, char* argv[], const Log& output)
+		void AfsExtract(const ArgParser& parser, const Log& output)
 		{
-			std::string filepath{ argv[0] }, outpath{ argv[1] };
+			if (parser.argc() < 2)
+			{
+				output.log(Level::ERROR, AfsExtract_help_text);
+				return;
+			}
 
-			output.log(Flags::LOG, "Loading AFS File: " + filepath + "\n");
-			afs::AfsFile afsFile(filepath);
-			output.log(Flags::LOG, "Extracting AFS To: " + outpath + "\n");
-			afsFile.saveAll(outpath, true);
+			std::string filepath{ *parser.arg(0) }, outpath{ *parser.arg(1) };
+
+			if (!std::filesystem::exists(filepath)) { output.log(Level::ERROR, "Unable To Locate Requested File!"); return; }
+
+			output.log(Level::LOG, "Loading AFS File: " + filepath + "\n");
+			afs::AfsFile afsFile(filepath, output);
+			output.log(Level::LOG, "Extracting AFS To: " + outpath + "\n");
+			afsFile.extractAll(outpath, parser.hasFlag("i"));
 		}
 
-		void AfsBuild(int argc, char* argv[], const Log& output)
+		void AfsBuild(const ArgParser& parser, const Log& output)
 		{
-			std::string filepath{ argv[0] }, outpath{ argv[1] };
+			if (parser.argc() < 2)
+			{
+				output.log(Level::ERROR, AfsBuild_help_text);
+				return;
+			}
 
-			output.log(Flags::LOG, "Loading AFS File: " + filepath + "\n");
-			afs::AfsFile afsFile;
-			output.log(Flags::LOG, "Extracting AFS To: " + outpath + "\n");
+			std::string filepath{ *parser.arg(1) }, outpath{ *parser.arg(0) };
+
+			if (!std::filesystem::is_directory(filepath)) { output.log(Level::ERROR, "Unable To Locate Requested Directory!"); return; }
+
+			output.log(Level::LOG, "Loading AFS File: " + filepath + "\n");
+			afs::AfsFile afsFile(output);
+			output.log(Level::LOG, "Extracting AFS To: " + outpath + "\n");
 			afsFile.buildAfs(filepath, outpath);
 		}
 	}

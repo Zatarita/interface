@@ -1,53 +1,42 @@
 #include "afs.h"
 
-using namespace debug;
-
 namespace afs
 {
-	AfsFile::AfsFile(const std::string& path)
+	AfsFile::AfsFile(const std::string& path, const Interface::Log& log) : Logger(&log), datInfo(log)
 	{
 		loadFromFile(path);
 	}
 
-	void AfsFile::save(const size_t& index, const std::string& path, const bool& mkdirs)
+	void AfsFile::extract(const size_t& index, const std::string& path, const bool& ignore_empty)
 	{
 		if (index > file_count) return;
-		if (!files[index].size) return;
-
-		if (!std::filesystem::exists(path))
-			std::filesystem::create_directory(path);
+		if (files[index].rawData.empty() && ignore_empty) return;
 
 		std::string outpath;
-		if (!mkdirs)
+		if(datInfo[index].filename == "_")
 			outpath = path + "/" + file_table.entries[index].filename;
 		else
-		{
-			std::filesystem::path dir(path + "/" + datInfo[index].filename);
-			if(dir.parent_path().string() != "")
-				std::filesystem::create_directories(dir.parent_path());
-			if(datInfo[index].filename == "_")
-				outpath = path + "/" + file_table.entries[index].filename;
-			else
-				outpath = path + "/" + datInfo[index].filename;
-		}
+			outpath = path + "/" + datInfo[index].filename;
+
+		Interface::createSavePath(outpath);
 
 		std::ofstream stream(outpath, std::ios::binary);
 		stream.write((char*)files[index].rawData.data(), files[index].size);
 		stream.close();
 	}
 
-	void AfsFile::save(const std::string& name, const std::string& path, const bool& mkdirs)
+	void AfsFile::extract(const std::string& name, const std::string& path, const bool& ignore_empty)
 	{
-		save(indexFromName(name), path, mkdirs);
+		extract(indexFromName(name), path, ignore_empty);
 	}
 
-	void AfsFile::saveAll(const std::string& path, const bool& mkdirs)
+	void AfsFile::extractAll(const std::string& path, const bool& ignore_empty)
 	{
-		for (int i = 1; i < file_count-1; i++)
-			save(i, path, mkdirs);
+		for (uint32_t i = 1; i < file_count - 1; i++)
+			extract(i, path, ignore_empty);
 	}
 
-	const size_t& AfsFile::indexFromName(const std::string& name)
+	size_t AfsFile::indexFromName(const std::string& name)
 	{
 		for (size_t i = 0; i < file_count; i++)
 			if (file_table.entries[i].filename == name) return i;
@@ -56,27 +45,27 @@ namespace afs
 
 	bool AfsFile::loadFromFile(const std::string& path)
 	{
-		emit(level::log, "Creating File Stream..\n");
+		print(Level::LOG, "Creating File Stream..");
 		std::ifstream stream(path, std::ios::binary);
 		if (!stream.is_open())		 return false;
 		if (!validateHeader(stream)) return false;
-		emit(level::log, "\tFile Open And Verified!\n");
+		print(Level::LOG, "\tFile Open And Verified!");
 
-		emit(level::log, "Parsing Contents\n");
+		print(Level::LOG, "Parsing Contents");
 		getFileCount(stream);
-		emit(level::log, "\tAllocating Memory:\n");
+		print(Level::LOG, "\tAllocating Memory:");
 		allocateHeaderMemory();
-		emit(level::log, "\tReading TOC..\n");
+		print(Level::LOG, "\tReading TOC..");
 		readEntryHeaders(stream);
-		emit(level::log, "\tRetreiving File Table Metadata\n");
+		print(Level::LOG, "\tRetreiving File Table Metadata");
 		readFileTableHeader(stream);
-		emit(level::log, "\tAllocating Memory For File Contents:\n");
+		print(Level::LOG, "\tAllocating Memory For File Contents:");
 		allocateFileMemory();
-		emit(level::log, "\tReading Files\n");
+		print(Level::LOG, "\tReading Files");
 		readEntries(stream);
-		emit(level::log, "\tLoading File Table Heirarchy\n");
+		print(Level::LOG, "\tLoading File Table Heirarchy");
 		readFileTable(stream);
-		emit(level::log, "\tLoading AFS Info\n");
+		print(Level::LOG, "\tLoading AFS Info");
 		readDatInfo();
 
 		return true;
@@ -93,16 +82,16 @@ namespace afs
 	void AfsFile::getFileCount(std::istream& stream) 
 	{
 		stream >> file_count;
-		emit(level::verbose, "\tFile Count: " + std::to_string(file_count.cast()) + "\n");
+		print(Level::VERBOSE, "\tFile Count: " + std::to_string(file_count.cast()));
 	}
 
 	void AfsFile::allocateHeaderMemory()
 	{
-		emit(level::verbose, "\t\tClearing Any Potential Old Entries\n");
+		print(Level::VERBOSE, "\t\tClearing Any Potential Old Entries");
 		files.clear();
 		file_table.entries.clear();
 
-		emit(level::verbose, "\t\tResizing File Table, and TOC\n");
+		print(Level::VERBOSE, "\t\tResizing File Table, and TOC");
 		files.resize(file_count);
 		file_table.entries.resize(file_count);
 	}
@@ -112,14 +101,14 @@ namespace afs
 		for (Entry& file : files)
 		{
 			stream >> file.offset >> file.size;
-			emit(level::verbose, std::string("\t\t" + std::to_string(file.offset.cast()) + " [" + std::to_string(file.size.cast())) + "]\n");
+			print(Level::VERBOSE, std::string("\t\t" + std::to_string(file.offset.cast()) + " [" + std::to_string(file.size.cast())) + "]");
 		}
 	}
 
 	void AfsFile::readFileTableHeader(std::istream& stream)
 	{
 		stream >> file_table.offset >> file_table.size;
-		emit(level::verbose, "\t\tFile Table: " + std::to_string(file_table.offset.cast()) + " [" + std::to_string(file_table.size.cast()) + "]\n");
+		print(Level::VERBOSE, "\t\tFile Table: " + std::to_string(file_table.offset.cast()) + " [" + std::to_string(file_table.size.cast()) + "]");
 	}
 
 	void AfsFile::allocateFileMemory()
@@ -147,6 +136,7 @@ namespace afs
 	{
 		for (Entry& entry : entries)
 		{
+			entry.filename.resize(FILENAME_LENGTH);
 			stream.read(entry.filename.data(), FILENAME_LENGTH);
 			stream >> entry.time.year >> entry.time.month >> entry.time.day
 				>> entry.time.hour >> entry.time.minute >> entry.time.second;
@@ -158,8 +148,16 @@ namespace afs
 	{
 		for (Entry& entry : entries)
 		{
-			entry.filename.resize(FILENAME_LENGTH);
-			stream.write(entry.filename.data(), entry.filename.size());
+			if (entry.filename == "_")
+			{
+				stream.write(SIZE0.data(), SIZE0.size());
+				continue;
+			}
+			else
+			{
+				entry.filename.resize(FILENAME_LENGTH);
+				stream.write(entry.filename.data(), entry.filename.size());
+			}
 			stream << entry.time.year << entry.time.month << entry.time.day
 				   << entry.time.hour << entry.time.minute << entry.time.second;
 			stream << entry.filesize;
@@ -187,13 +185,14 @@ namespace afs
 	void AfsFile::buildAfsInfo(const std::string path)
 	{
 		datInfo.build(path);
-		file_count = datInfo.size() + 1;
+		file_count = static_cast<uint32_t>(datInfo.size());
 	}
 
 	void AfsFile::buildFileTable()
 	{
 		files[0].size = (uint32_t) datInfo.calculateSize();
-		file_table.entries[0] = { {}, "afsinfo.dat", files[0].size };
+		if(file_table.entries[0].filename.empty())
+			file_table.entries[0] = { {}, "afsinfo.dat", files[0].size };
 		for (size_t i = 1; i < file_count; i++)
 		{
 			// I ignore last edit date as there is no easy way to do this right now
@@ -204,21 +203,16 @@ namespace afs
 		return;
 	}
 
-	static inline uint32_t allign(uint32_t starting_offset, uint32_t BLOCK_ALLIGNMENT)
-	{
-		return ((starting_offset / BLOCK_ALLIGNMENT) + (starting_offset % BLOCK_ALLIGNMENT != 0)) * BLOCK_ALLIGNMENT;
-	}
-
 	void AfsFile::calculateOffsets()
 	{
 		uint32_t starting_offset = ((file_count + 2) * 8);
 		for (auto& entry : files)
 		{
-			starting_offset = allign(starting_offset, BLOCK_ALLIGNMENT);
+			starting_offset = Interface::allign(starting_offset, BLOCK_ALLIGNMENT);
 			entry.offset = starting_offset;
 			starting_offset += entry.size;
 		}
-		starting_offset = allign(starting_offset, BLOCK_ALLIGNMENT);
+		starting_offset = Interface::allign(starting_offset, BLOCK_ALLIGNMENT);
 		file_table.offset = starting_offset;
 		file_table.size = file_count * ENTRY_SIZE;
 	}
@@ -230,8 +224,8 @@ namespace afs
 
 		writeHeader(stream);
 		writeEntryHeaders(stream);
-		writeFileTable(stream);
 		writeEntries(stream);
+		writeFileTable(stream);
 		padRemainingFile(stream);
 
 		stream.close();
@@ -240,12 +234,12 @@ namespace afs
 	void AfsFile::writeHeader(std::ostream& stream)
 	{
 		stream.write("AFS\0", 4);
-		stream << file_count;
+		stream << le_uint32_t(static_cast<uint32_t>(files.size()));
 	}
 
 	void AfsFile::readFilesToEntries(const std::string& path)
 	{
-		for (int i = 1; i < file_count; i ++)
+		for (uint32_t i = 1; i < file_count; i ++)
 		{
 			files[i].size = datInfo[i].size;
 			files[i].rawData.resize(datInfo[i].size);
@@ -254,18 +248,20 @@ namespace afs
 			stream.read((char*)files[i].rawData.data(), datInfo[i].size);
 			stream.close();
 		}
+		return;
 	}
 
 	void AfsFile::writeEntryHeaders(std::ostream& stream)
 	{
 		for (auto& entry : files)
 			stream << entry.offset << entry.size;
+		stream << file_table.offset << file_table.size;
 	}
 
 	void AfsFile::generateAfsInfo()
 	{
 		files[0].rawData = datInfo.compile();
-		files[0].size = files[0].rawData.size();
+		files[0].size = static_cast<uint32_t>(files[0].rawData.size());
 	}
 
 	void AfsFile::writeEntries(std::ostream& stream)
@@ -279,14 +275,13 @@ namespace afs
 
 	void AfsFile::writeFileTable(std::ostream& stream)
 	{
-		stream << file_table.offset << file_table.size;
 		stream.seekp(file_table.offset.cast());
 		file_table.write(stream);
 	}
 
 	void AfsFile::padRemainingFile(std::ostream& stream)
 	{
-		stream.seekp(allign(stream.tellp(), BLOCK_ALLIGNMENT) - 4);
+		stream.seekp( Interface::allign(static_cast<uint32_t>(stream.tellp()), BLOCK_ALLIGNMENT) - 4 );
 		stream << le_int32_t{};
 	}
 
@@ -299,5 +294,12 @@ namespace afs
 		buildFileTable();
 		calculateOffsets();
 		writeFile(out);
+	}
+
+	void AfsFile::save(const std::string& path)
+	{
+		buildFileTable();
+		calculateOffsets();
+		writeFile(path);
 	}
 }

@@ -5,13 +5,41 @@
 #include <fstream>
 #include <vector>
 #include <iostream>
+#include <filesystem>
+
+#define EXCEPT_TEXT(x) std::filesystem::path(__FILE__).filename().string() + "[" + std::to_string(__LINE__) + "] \n\tREASON: " + x
+
 
 namespace Interface
 {
-    enum class Flags
+    // Abstract class used to interface with some text medium for text output
+    class OutputWrapper
     {
-        SILENT,         // No Output
+    public:
+        virtual void write(const std::string& msg) = 0;
+    };
+
+    // Write To Cout Wrapper
+    class stdOutput : public OutputWrapper
+    {
+    public:
+        void write(const std::string& msg) override { std::cout << msg; }
+    };
+
+    // Save To File Wrapper
+    class fileOutput : public OutputWrapper
+    {
+        std::ofstream file;
+    public:
+        fileOutput(const std::string& path) { file.open(path); };
+        ~fileOutput() { file.close(); }
+        void write(const std::string& msg) override { if (file.is_open()) file.write(msg.data(), msg.size()); }
+    };
+
+    enum class Level
+    {
         EXCEPTION,      // Only Print Fatal Exceptions
+        SILENT,         // No Output
         ERROR,          // Print Potentially Recoverable Errors
         LOG,            // Print Standard Ouput
         VERBOSE         // Print Verbose Output
@@ -19,17 +47,15 @@ namespace Interface
 
     class Log
     {
-        Flags logLevel = Flags::LOG;
-        std::ostream* streamBuffer = &std::cout;
+        mutable Level logLevel = Level::LOG;
+        std::vector<OutputWrapper*> probes{};
 
         mutable std::vector<std::string> history;
     public:
-        void setLevel(const Flags&);
-        void log(const Flags& severity, const std::string& msg) const;
+        ~Log();
+        void setLevel(const Level&) const;
+        void log(const Level& severity, const std::string& msg) const;
         void saveHistory(const std::string& path) const;
-        void redirectBuffer(std::ostream* newBuffer);
+        void attachProbe(OutputWrapper* newProbe);
     };
-
-    static Log globalLog;
-    static inline void emit(const Flags& severity, const std::string& msg) {  globalLog.log(severity, msg); }
 }

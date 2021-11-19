@@ -24,7 +24,7 @@ public:
 	 * Operators 
 	-------------------------------------------------------------------------------------------------------------------------------------------------*/
 	operator  scalar_t () 	  { return cast(); }						 // Convert to contained type of native endianness.
-	explicit operator const size_t&() { return cast(); }						// Used for fixed string conversion.
+	explicit operator const size_t() { return cast(); }						// Used for fixed string conversion.
 
 	void operator=(const scalar_t& new_value) { assign(new_value); }		    // Assignment operator for value type
 	template <std::endian endian_t>
